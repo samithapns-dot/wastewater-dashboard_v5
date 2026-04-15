@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Wastewater Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:#080c10; --panel:#0d1420; --border:#1a2a3a;
+  --accent:#00d4ff; --accent2:#00ff9d;
+  --warn:#ff6b35; --danger:#ff2d55;
+  --flow:#a78bfa; --flow2:#7c3aed;
+  --muted:#3a5068; --text:#c8dce8; --text-dim:#4a6880;
+  --mono:'Share Tech Mono',monospace; --body:'Barlow',sans-serif;
+}
+
+/* ── RESET ─────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%;}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--body);
+  height:100%;overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+
+/* ── HEADER ─────────────────────────────────────────── */
+header{
+  position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 24px;
+  border-bottom:1px solid var(--border);
+  background:rgba(8,12,16,.97);
+  backdrop-filter:blur(12px);
+  flex-wrap:wrap;gap:10px;
+}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{
+  width:36px;height:36px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;
+}
+.logo-text h1{font-family:var(--mono);font-size:15px;letter-spacing:3px;color:var(--accent);text-transform:uppercase}
+.logo-text p{font-size:10px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase}
+.header-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.status-pill{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background .3s;flex-shrink:0;}
+.dot.online{background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:pulse 2s infinite}
+.dot.warning{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.dot.error{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#last-update{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.source-badge{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);
+  border-radius:20px;padding:4px 10px;font-family:var(--mono);font-size:11px;color:var(--accent);
+}
+
+/* ── MAIN LAYOUT ─────────────────────────────────────── */
+main{
+  position:relative;z-index:1;
+  padding:20px 24px;
+  max-width:1600px;margin:0 auto;
+  display:flex;flex-direction:column;gap:18px;
+}
+
+/* ── FLOW BANNER ─────────────────────────────────────── */
+.flow-banner{
+  background:var(--panel);border:1px solid rgba(167,139,250,.3);
+  border-radius:14px;padding:20px 24px;
+  position:relative;overflow:hidden;animation:fadeUp .4s ease both;
+}
+.flow-banner::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--flow2),var(--flow));opacity:.8;
+}
+/* 4 metrics + badge — responsive grid */
+.flow-banner-inner{
+  display:grid;
+  grid-template-columns:1fr auto 1fr auto 1fr auto 1fr auto;
+  gap:16px;align-items:center;
+}
+.flow-metric{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.flow-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);font-weight:600;white-space:nowrap;}
+.flow-value{font-family:var(--mono);font-size:clamp(22px,3vw,32px);color:var(--flow);line-height:1;}
+.flow-value span{font-size:13px;color:var(--text-dim);margin-left:3px;}
+.flow-value.ok{color:var(--accent2);}
+.flow-divider{width:1px;height:50px;background:var(--border);}
+.flow-badge{
+  padding:6px 14px;border-radius:20px;
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;
+  background:rgba(167,139,250,.12);color:var(--flow);border:1px solid rgba(167,139,250,.3);
+  white-space:nowrap;
+}
+.flow-alert{
+  display:none;align-items:center;gap:8px;
+  background:rgba(255,45,85,.12);border:1px solid rgba(255,45,85,.4);
+  border-radius:8px;padding:10px 14px;font-size:13px;color:var(--danger);
+  font-weight:600;margin-top:14px;
+}
+.flow-alert.active{display:flex;animation:flash 2s ease-in-out infinite;}
+
+/* ── SYS ROW ─────────────────────────────────────────── */
+.sys-row{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:14px;animation:fadeUp .5s ease .1s both;
+}
+.sys-card{
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;
+}
+.sys-card-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);font-weight:600;}
+.sys-card-value{font-family:var(--mono);font-size:clamp(15px,2vw,20px);color:var(--text);}
+.sys-card-value.green{color:var(--accent2);}
+.sys-card-value.purple{color:var(--flow);}
+.sys-card-value.orange{color:var(--warn);}
+.sys-card-sub{font-size:11px;color:var(--text-dim);}
+
+/* ── TANK GRID ───────────────────────────────────────── */
+.tank-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.tank-card{
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:14px;padding:22px;
+  position:relative;overflow:hidden;transition:border-color .4s;
+  animation:fadeUp .5s ease both;
+}
+.tank-card:nth-child(2){animation-delay:.1s;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.tank-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));opacity:.6;}
+.tank-card.warning{border-color:var(--warn);}
+.tank-card.warning::before{background:linear-gradient(90deg,var(--warn),#ffb347);opacity:1;}
+.tank-card.error{border-color:var(--danger);}
+.tank-card.offline{border-color:var(--danger);}
+.tank-card.offline::before{background:linear-gradient(90deg,var(--danger),#ff6b90);opacity:1;}
+.tank-card.offline .tank-fill{opacity:.25;filter:grayscale(1);}
+.tank-card.offline .tank-name{color:var(--danger);}
+.card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;}
+.tank-title{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--text-dim);font-weight:600;margin-bottom:3px;}
+.tank-name{font-family:var(--mono);font-size:clamp(16px,2vw,22px);color:var(--accent);letter-spacing:1px;}
+.tank-timestamp{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:3px;}
+.card-badge{padding:5px 12px;border-radius:20px;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;}
+.badge-ok{background:rgba(0,255,157,.12);color:var(--accent2);border:1px solid rgba(0,255,157,.3);}
+.badge-warning{background:rgba(255,107,53,.15);color:var(--warn);border:1px solid rgba(255,107,53,.4);}
+.badge-danger{background:rgba(255,45,85,.15);color:var(--danger);border:1px solid rgba(255,45,85,.4);}
+.badge-offline{background:rgba(58,80,104,.3);color:var(--text-dim);border:1px solid var(--border);}
+.tank-viz-row{display:flex;gap:20px;align-items:flex-end;margin-bottom:18px;}
+.tank-visual{
+  flex-shrink:0;width:64px;height:140px;
+  border:2px solid var(--border);border-radius:6px 6px 3px 3px;
+  position:relative;overflow:hidden;background:rgba(0,0,0,.3);
+}
+.tank-visual::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.02) 0px,rgba(255,255,255,.02) 1px,transparent 1px,transparent 12px);}
+.tank-fill{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(0,212,255,.8),rgba(0,212,255,.25));transition:height 1.4s cubic-bezier(.4,0,.2,1);border-top:2px solid rgba(0,212,255,.9);}
+.tank-fill.warning{background:linear-gradient(180deg,rgba(255,107,53,.85),rgba(255,107,53,.25));border-top-color:var(--warn);}
+.tank-fill::after{content:'';position:absolute;top:-1px;left:0;right:0;height:6px;background:rgba(255,255,255,.15);animation:ripple 2.5s ease-in-out infinite;}
+@keyframes ripple{0%,100%{transform:scaleX(1) translateY(0);opacity:.6}50%{transform:scaleX(.95) translateY(2px);opacity:.2}}
+.tank-pct-label{position:absolute;bottom:5px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:12px;font-weight:bold;color:rgba(255,255,255,.9);text-shadow:0 1px 4px rgba(0,0,0,.8);z-index:2;}
+.metrics{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0;}
+.metric{display:flex;flex-direction:column;gap:2px;}
+.metric-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);font-weight:600;}
+.metric-value{font-family:var(--mono);font-size:clamp(18px,2.2vw,26px);color:var(--text);line-height:1.1;}
+.metric-value span{font-size:13px;color:var(--text-dim);margin-left:3px;}
+.metric-value.accent{color:var(--accent);}
+.metric-value.warning{color:var(--warn);}
+.progress-section{margin-bottom:16px;}
+.progress-label{display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-bottom:6px;letter-spacing:1px;}
+.progress-track{height:7px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;position:relative;}
+.progress-track::after{content:'';position:absolute;top:0;bottom:0;width:2px;background:rgba(255,107,53,.6);left:var(--warn-pos,90%);}
+.progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 1.4s cubic-bezier(.4,0,.2,1);}
+.progress-fill.warning{background:linear-gradient(90deg,var(--warn),#ffb347);}
+.progress-fill.danger{background:linear-gradient(90deg,var(--danger),#ff6b35);}
+.alert-banner{display:none;align-items:center;gap:10px;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:600;letter-spacing:.5px;}
+.alert-banner.active{display:flex;animation:flash 2s ease-in-out infinite;}
+.alert-banner.warn-style{background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.4);color:var(--warn);}
+.alert-banner.offline-style{background:rgba(255,45,85,.12);border:1px solid rgba(255,45,85,.5);color:var(--danger);}
+@keyframes flash{0%,100%{opacity:1}50%{opacity:.6}}
+.offline-sub{display:block;font-size:11px;font-weight:400;margin-top:3px;opacity:.8;}
+.age-bar{height:3px;background:rgba(255,255,255,.05);border-radius:2px;margin-top:10px;overflow:hidden;}
+.age-fill{height:100%;border-radius:2px;transition:width .5s ease,background .5s;}
+.age-label{font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:4px;text-align:right;}
+.chart-section{border-top:1px solid var(--border);padding-top:16px;}
+.chart-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);font-weight:600;}
+.chart-wrap{position:relative;height:72px;}
+canvas.history-chart{width:100%;height:100%;display:block;}
+.chart-no-data{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;color:var(--text-dim);}
+
+.range-tabs{display:flex;gap:4px;flex-wrap:wrap;}
+.range-tab{padding:3px 9px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-family:var(--mono);font-size:10px;cursor:pointer;}
+.range-tab:hover{border-color:var(--accent);color:var(--accent);}
+.range-tab.active{background:rgba(0,212,255,.12);border-color:rgba(0,212,255,.35);color:var(--accent);}
+
+/* ── FLOW GRAPH ──────────────────────────────────────── */
+.flow-graph-section{
+  background:var(--panel);border:1px solid rgba(167,139,250,.2);
+  border-radius:14px;padding:20px 24px;
+  animation:fadeUp .6s ease .2s both;position:relative;overflow:hidden;
+}
+.flow-graph-section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--flow2),var(--flow));opacity:.6;}
+.flow-graph-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.flow-graph-title{font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-dim);font-weight:600;}
+.flow-graph-sub{font-family:var(--mono);font-size:11px;color:var(--flow);margin-top:3px;}
+.flow-graph-stats{display:flex;gap:20px;flex-wrap:wrap;}
+.fgs-item{display:flex;flex-direction:column;gap:2px;text-align:right;}
+.fgs-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim);}
+.fgs-val{font-family:var(--mono);font-size:14px;color:var(--flow);}
+.flow-bar-wrap{position:relative;height:140px;}
+canvas#flow-bar-chart{width:100%;height:100%;display:block;}
+.flow-bar-no-data{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;color:var(--text-dim);}
+
+footer{
+  position:relative;z-index:1;text-align:center;
+  padding:14px;font-family:var(--mono);font-size:10px;
+  color:var(--text-dim);border-top:1px solid var(--border);letter-spacing:1px;
+}
+
+/* ══════════════════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS
+   ══════════════════════════════════════════════════════ */
+
+/* Large desktop (1400px+): comfortable, no scrolling needed */
+@media (min-width:1400px){
+  main{padding:16px 32px;}
+  .flow-bar-wrap{height:160px;}
+}
+
+/* Medium desktop / laptop (1024px – 1399px): default layout, compact */
+@media (max-width:1200px){
+  .flow-value{font-size:26px;}
+}
+
+/* Tablet landscape (768px – 1023px) */
+@media (max-width:1023px){
+  .flow-banner-inner{
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:auto auto;
+    gap:14px;
+  }
+  .flow-divider{display:none;}
+  .flow-badge{grid-column:1 / -1;justify-self:start;}
+
+  .sys-row{grid-template-columns:repeat(2,1fr);}
+  .tank-grid{grid-template-columns:1fr 1fr;}
+  .flow-bar-wrap{height:120px;}
+}
+
+/* Tablet portrait (600px – 767px) */
+@media (max-width:767px){
+  header{padding:12px 16px;}
+  main{padding:12px 16px;gap:14px;}
+
+  .logo-text h1{font-size:13px;letter-spacing:2px;}
+  #last-update{display:none;}
+
+  .flow-banner{padding:16px;}
+  .flow-banner-inner{
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  .flow-divider{display:none;}
+  .flow-value{font-size:22px;}
+  .flow-badge{grid-column:1 / -1;}
+
+  .sys-row{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .sys-card{padding:12px 14px;}
+
+  .tank-grid{grid-template-columns:1fr;}
+  .tank-card{padding:18px;}
+  .tank-visual{width:56px;height:120px;}
+  .metric-value{font-size:22px;}
+
+  .flow-graph-header{flex-direction:column;align-items:flex-start;}
+  .flow-graph-stats{gap:14px;}
+  .fgs-item{text-align:left;}
+  .flow-bar-wrap{height:110px;}
+}
+
+/* Mobile (up to 599px) */
+@media (max-width:599px){
+  header{padding:10px 14px;gap:8px;}
+  main{padding:10px 12px;gap:12px;}
+
+  .logo-text h1{font-size:12px;letter-spacing:1.5px;}
+  .logo-text p{display:none;}
+  .source-badge{display:none;}
+  #last-update{display:none;}
+
+  .flow-banner{padding:14px;}
+  .flow-banner-inner{
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .flow-value{font-size:20px;}
+  .flow-badge{grid-column:1 / -1;text-align:center;justify-self:stretch;text-align:center;}
+
+  .sys-row{grid-template-columns:repeat(2,1fr);gap:8px;}
+  .sys-card{padding:10px 12px;}
+  .sys-card-value{font-size:16px;}
+
+  .tank-grid{grid-template-columns:1fr;}
+  .tank-card{padding:14px;}
+  .card-header{margin-bottom:12px;}
+  .tank-name{font-size:18px;}
+  .tank-visual{width:50px;height:110px;}
+  .tank-viz-row{gap:14px;}
+  .metric-value{font-size:20px;}
+  .chart-wrap{height:60px;}
+
+  .flow-bar-wrap{height:100px;}
+  .range-tab{padding:3px 7px;font-size:9px;}
+}
+
+/* Very small phones (below 380px) */
+@media (max-width:379px){
+  .flow-banner-inner{grid-template-columns:1fr;}
+  .tank-visual{width:44px;height:100px;}
+  .metric-value{font-size:18px;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">💧</div>
+    <div class="logo-text">
+      <h1>WasteWater Monitor</h1>
+      <p>P&S Maintenance Team · Real-time</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="source-badge">📊 Google Sheets</div>
+    <div class="status-pill">
+      <div class="dot" id="global-dot"></div>
+      <span id="global-status">Connecting…</span>
+    </div>
+    <div id="last-update">--:--:--</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- FLOW BANNER: 4 separate sibling columns (fixed nesting) -->
+  <div class="flow-banner">
+    <div class="flow-banner-inner">
+      <div class="flow-metric">
+        <div class="flow-label">Live flow rate</div>
+        <div class="flow-value" id="flow-live">—<span>L/h</span></div>
+      </div>
+      <div class="flow-divider"></div>
+      <div class="flow-metric">
+        <div class="flow-label">Meter Totalizer</div>
+        <div class="flow-value" id="flow-totalizer">—<span>m³</span></div>
+      </div>
+      <div class="flow-divider"></div>
+      <div class="flow-metric">
+        <div class="flow-label">Today's volume (8am–now)</div>
+        <div class="flow-value" id="flow-today">—<span>L</span></div>
+      </div>
+      <div class="flow-divider"></div>
+      <div class="flow-metric">
+        <div class="flow-label">Yesterday (8am–8am)</div>
+        <div class="flow-value ok" id="flow-yesterday">—<span>L</span></div>
+      </div>
+      <div class="flow-badge" id="flow-badge">FLOWMETER</div>
+    </div>
+    <div class="flow-alert" id="flow-alert">⚠ HIGH FLOW RATE — EXCEEDS NORMAL RANGE</div>
+  </div>
+
+  <!-- SYS ROW -->
+  <div class="sys-row">
+    <div class="sys-card">
+      <div class="sys-card-label">EQ Tank</div>
+      <div class="sys-card-value green" id="sys-eq">—%</div>
+      <div class="sys-card-sub" id="sys-eq-sub">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="sys-card-label">Oil Tank</div>
+      <div class="sys-card-value green" id="sys-oil">—%</div>
+      <div class="sys-card-sub" id="sys-oil-sub">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="sys-card-label">Inflow today</div>
+      <div class="sys-card-value purple" id="sys-inflow">— L</div>
+      <div class="sys-card-sub">DAF unit input</div>
+    </div>
+    <div class="sys-card">
+      <div class="sys-card-label">System uptime</div>
+      <div class="sys-card-value green" id="sys-uptime">—</div>
+      <div class="sys-card-sub">ESP32 online</div>
+    </div>
+  </div>
+
+  <!-- TANK CARDS -->
+  <div class="tank-grid">
+    <div class="tank-card" id="card-0">
+      <div class="card-header">
+        <div>
+          <div class="tank-title">Unit 01</div>
+          <div class="tank-name" id="name-0">EQ Tank</div>
+          <div class="tank-timestamp" id="ts-0">Last update: —</div>
+        </div>
+        <div class="card-badge badge-offline" id="badge-0">No Data</div>
+      </div>
+      <div class="alert-banner warn-style" id="warn-0">⚠ TANK NEARLY FULL — ACTION REQUIRED</div>
+      <div class="alert-banner offline-style" id="offline-0">
+        🔴 UNIT OFFLINE — NO DATA RECEIVED
+        <span class="offline-sub" id="offline-age-0">Last seen: unknown</span>
+      </div>
+      <div class="tank-viz-row">
+        <div class="tank-visual">
+          <div class="tank-fill" id="fill-0" style="height:0%">
+            <div class="tank-pct-label" id="pct-label-0">—</div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Fill Level</div><div class="metric-value accent" id="level-0">—<span>ft</span></div></div>
+          <div class="metric"><div class="metric-label">Fill %</div><div class="metric-value" id="pct-0">—<span>%</span></div></div>
+          <div class="metric"><div class="metric-label">Uptime</div><div class="metric-value" id="uptime-0" style="font-size:15px">—</div></div>
+        </div>
+      </div>
+      <div class="progress-section">
+        <div class="progress-label"><span>Empty</span><span>Full</span></div>
+        <div class="progress-track" id="track-0"><div class="progress-fill" id="bar-0" style="width:0%"></div></div>
+      </div>
+      <div class="age-bar"><div class="age-fill" id="age-0" style="width:100%"></div></div>
+      <div class="age-label" id="age-label-0">—</div>
+      <div class="chart-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+          <div class="chart-title" id="chart-title-0">Fill % — Last 6 hours</div>
+          <div class="range-tabs" id="tabs-0">
+            <button class="range-tab" onclick="setTankRange(0,1,this)">1h</button>
+            <button class="range-tab" onclick="setTankRange(0,2,this)">2h</button>
+            <button class="range-tab active" onclick="setTankRange(0,6,this)">6h</button>
+            <button class="range-tab" onclick="setTankRange(0,12,this)">12h</button>
+            <button class="range-tab" onclick="setTankRange(0,24,this)">24h</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas class="history-chart" id="chart-0"></canvas>
+          <div class="chart-no-data" id="nodata-0">Waiting for data…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tank-card" id="card-1">
+      <div class="card-header">
+        <div>
+          <div class="tank-title">Unit 02</div>
+          <div class="tank-name" id="name-1">Oil Tank</div>
+          <div class="tank-timestamp" id="ts-1">Last update: —</div>
+        </div>
+        <div class="card-badge badge-offline" id="badge-1">No Data</div>
+      </div>
+      <div class="alert-banner warn-style" id="warn-1">⚠ TANK NEARLY FULL — ACTION REQUIRED</div>
+      <div class="alert-banner offline-style" id="offline-1">
+        🔴 UNIT OFFLINE — NO DATA RECEIVED
+        <span class="offline-sub" id="offline-age-1">Last seen: unknown</span>
+      </div>
+      <div class="tank-viz-row">
+        <div class="tank-visual">
+          <div class="tank-fill" id="fill-1" style="height:0%">
+            <div class="tank-pct-label" id="pct-label-1">—</div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Fill Level</div><div class="metric-value accent" id="level-1">—<span>ft</span></div></div>
+          <div class="metric"><div class="metric-label">Fill %</div><div class="metric-value" id="pct-1">—<span>%</span></div></div>
+          <div class="metric"><div class="metric-label">Uptime</div><div class="metric-value" id="uptime-1" style="font-size:15px">—</div></div>
+        </div>
+      </div>
+      <div class="progress-section">
+        <div class="progress-label"><span>Empty</span><span>Full</span></div>
+        <div class="progress-track" id="track-1"><div class="progress-fill" id="bar-1" style="width:0%"></div></div>
+      </div>
+      <div class="age-bar"><div class="age-fill" id="age-1" style="width:100%"></div></div>
+      <div class="age-label" id="age-label-1">—</div>
+      <div class="chart-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+          <div class="chart-title" id="chart-title-1">Fill % — Last 6 hours</div>
+          <div class="range-tabs" id="tabs-1">
+            <button class="range-tab" onclick="setTankRange(1,1,this)">1h</button>
+            <button class="range-tab" onclick="setTankRange(1,2,this)">2h</button>
+            <button class="range-tab active" onclick="setTankRange(1,6,this)">6h</button>
+            <button class="range-tab" onclick="setTankRange(1,12,this)">12h</button>
+            <button class="range-tab" onclick="setTankRange(1,24,this)">24h</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas class="history-chart" id="chart-1"></canvas>
+          <div class="chart-no-data" id="nodata-1">Waiting for data…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOW HISTORY CHART -->
+  <div class="flow-graph-section">
+    <div class="flow-graph-header">
+      <div>
+        <div class="flow-graph-title">Daily inflow volume — last 30 days</div>
+        <div class="flow-graph-sub">Each bar = 8:00 AM to 8:00 AM · Liters/day · DAF unit inflow</div>
+      </div>
+      <div class="flow-graph-stats">
+        <div class="fgs-item">
+          <div class="fgs-label">30-day avg</div>
+          <div class="fgs-val" id="flow-avg">— L</div>
+        </div>
+        <div class="fgs-item">
+          <div class="fgs-label">30-day peak</div>
+          <div class="fgs-val" id="flow-peak">— L</div>
+        </div>
+        <div class="fgs-item">
+          <div class="fgs-label">30-day total</div>
+          <div class="fgs-val" id="flow-total">— L</div>
+        </div>
+      </div>
+    </div>
+    <div class="flow-bar-wrap">
+      <canvas id="flow-bar-chart"></canvas>
+      <div class="flow-bar-no-data" id="flow-bar-nodata">Waiting for flow history data…</div>
+    </div>
+  </div>
+
+</main>
+
+<footer>WASTEWATER MONITOR · POWERED BY P&S MAINTENANCE TEAM · SAMITHA SUPUN</footer>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwsZulxcll5weBhWM0d7fCO-MDt_d1ezAPsvalIvwor3KxLgBBm4P3iVjTyvYP54b_iFQ/exec";
+
+const REFRESH_MS        = 10000;
+const WARN_PCT          = 90;   // ← alarm threshold updated to 90%
+const OFFLINE_MS        = 5 * 60 * 1000;
+const FLOW_MAX_NORMAL   = 30000;
+
+const tankData      = [{}, {}];
+const tankHist      = [[], []];
+const tankRangeHours= [6, 6];
+let flowHistory30   = [];
+let flowData        = {};
+
+window.addEventListener('DOMContentLoaded', function() {
+  pollAll();
+  setInterval(pollAll, REFRESH_MS);
+  setInterval(tickAgeBars, 10000);
+});
+
+function fetchScript(params) {
+  var url = SCRIPT_URL + '?' + Object.keys(params).map(function(k) {
+    return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  }).join('&');
+  return fetch(url, { redirect: 'follow', cache: 'no-store' })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+}
+
+function fetchWithRetry(params, retries) {
+  retries = retries || 3;
+  return fetchScript(params).catch(function(err) {
+    if (retries > 1) return new Promise(function(r){ setTimeout(r, 1500); }).then(function(){ return fetchWithRetry(params, retries - 1); });
+    return Promise.reject(err);
+  });
+}
+
+function format1(v) {
+  return Number(v).toLocaleString('en-US', { minimumFractionDigits:1, maximumFractionDigits:1 });
+}
+function format0(v) {
+  return Number(v).toLocaleString('en-US', { maximumFractionDigits:0 });
+}
+
+function pollAll() {
+  setStatus('fetching');
+  fetchWithRetry({ action: 'latest' }, 3)
+    .then(function(latest) {
+      if (!latest || latest.error) { setStatus('error'); return Promise.reject('no data'); }
+      if (latest.tank1) updateCard(0, latest.tank1);
+      if (latest.tank2) updateCard(1, latest.tank2);
+      if (latest.flow)  updateFlow(latest.flow);
+      updateGlobalStatus();
+      document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+      [['EQ_Tank',0],['Oil_Tank',1]].forEach(function(pair) {
+        fetchWithRetry({ action: 'history', unit: pair[0] }, 2).then(function(h) {
+          if (Array.isArray(h) && h.length > 1) {
+            tankHist[pair[1]] = h;
+            drawTankChart(pair[1]);
+            document.getElementById('nodata-' + pair[1]).style.display = 'none';
+          }
+        }).catch(function(){});
+      });
+
+      fetchWithRetry({ action: 'flowhistory' }, 2).then(function(fh) {
+        if (Array.isArray(fh) && fh.length > 0) {
+          flowHistory30 = fh;
+          document.getElementById('flow-bar-nodata').style.display = 'none';
+          drawFlowBarChart();
+          updateFlowStats();
+        }
+      }).catch(function(){});
+    })
+    .catch(function() {
+      setStatus('error');
+      document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    });
+}
+
+function updateFlow(f) {
+  flowData = f || {};
+  var live      = f.rate      != null ? +f.rate      : null;
+  var today     = f.today     != null ? +f.today     : null;
+  var yesterday = f.yesterday != null ? +f.yesterday : null;
+  var totalM3   = f.total_m3  != null ? +f.total_m3  : null;
+  var ts        = f.timestamp || null;
+  var offline   = isUnitOffline(ts);
+
+  setFlowVal('flow-live', live, 'L/h');
+  setFlowVal('flow-today', today, 'L');
+  setFlowVal('flow-yesterday', yesterday, 'L');
+
+  var totalEl = document.getElementById('flow-totalizer');
+  if (totalEl) {
+    var txt = '—';
+    if (totalM3 != null && !isNaN(totalM3)) txt = Number(totalM3).toLocaleString('en-US', { maximumFractionDigits:0 });
+    totalEl.innerHTML = txt + '<span>m³</span>';
+  }
+
+  setEl('sys-inflow', today != null ? format0(today) + ' L' : '—');
+
+  var alert = document.getElementById('flow-alert');
+  if (!offline && live != null && live > FLOW_MAX_NORMAL) alert.classList.add('active');
+  else alert.classList.remove('active');
+
+  var badge = document.getElementById('flow-badge');
+  if (offline) { badge.textContent = 'OFFLINE'; badge.style.color = 'var(--danger)'; }
+  else if (live == null) { badge.textContent = 'NO DATA'; badge.style.color = 'var(--text-dim)'; }
+  else { badge.textContent = 'ONLINE'; badge.style.color = 'var(--accent2)'; }
+}
+
+function setFlowVal(id, val, unit) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var text = '—';
+  if (val != null && !isNaN(val)) text = format1(val);
+  el.innerHTML = text + '<span>' + unit + '</span>';
+}
+
+function updateFlowStats() {
+  if (!flowHistory30.length) return;
+  var vals = flowHistory30.map(function(d){ return +d.vol; }).filter(function(v){ return !isNaN(v); });
+  if (!vals.length) return;
+  var avg   = vals.reduce(function(a,b){ return a+b; }, 0) / vals.length;
+  var peak  = Math.max.apply(null, vals);
+  var total = vals.reduce(function(a,b){ return a+b; }, 0);
+  setEl('flow-avg',   format0(avg)   + ' L');
+  setEl('flow-peak',  format0(peak)  + ' L');
+  setEl('flow-total', format0(total) + ' L');
+}
+
+function drawFlowBarChart() {
+  var canvas = document.getElementById('flow-bar-chart');
+  var dpr  = window.devicePixelRatio || 1;
+  var rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width  = rect.width  + 'px';
+  canvas.style.height = rect.height + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  var W = rect.width, H = rect.height;
+  ctx.clearRect(0, 0, W, H);
+
+  var data = flowHistory30.slice(-30);
+  if (!data.length) return;
+  var vals = data.map(function(d){ return +d.vol || 0; });
+  var maxV = Math.max.apply(null, vals) * 1.15 || 1;
+  var avg  = vals.reduce(function(a,b){ return a+b; },0) / vals.length;
+
+  var padL=10, padR=10, padT=10, padB=28;
+  var chartW = W - padL - padR;
+  var chartH = H - padT - padB;
+  var barW   = Math.max(4, (chartW / data.length) - 3);
+  var gap    = (chartW - barW * data.length) / (data.length - 1 || 1);
+
+  var avgY = padT + chartH - (avg / maxV) * chartH;
+  ctx.beginPath();
+  ctx.setLineDash([5,5]);
+  ctx.moveTo(padL, avgY); ctx.lineTo(W - padR, avgY);
+  ctx.strokeStyle = 'rgba(167,139,250,.4)';
+  ctx.lineWidth = 1; ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '10px Share Tech Mono, monospace';
+  ctx.fillStyle = 'rgba(167,139,250,.7)';
+  ctx.fillText('avg ' + format0(avg) + ' L', W - padR - 90, avgY - 4);
+
+  data.forEach(function(d, i) {
+    var v    = +d.vol || 0;
+    var barH = (v / maxV) * chartH;
+    var x    = padL + i * (barW + gap);
+    var y    = padT + chartH - barH;
+    var isYesterday = (i === data.length - 1);
+    var grad = ctx.createLinearGradient(0, y, 0, y + barH);
+    if (isYesterday) { grad.addColorStop(0, 'rgba(0,255,157,.9)'); grad.addColorStop(1, 'rgba(0,255,157,.2)'); }
+    else             { grad.addColorStop(0, 'rgba(167,139,250,.85)'); grad.addColorStop(1, 'rgba(124,58,237,.2)'); }
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, barW, barH, [2,2,0,0]);
+    else ctx.rect(x, y, barW, barH);
+    ctx.fill();
+    if (i % 5 === 0 || isYesterday) {
+      ctx.font = '9px Share Tech Mono, monospace';
+      ctx.fillStyle = isYesterday ? 'rgba(0,255,157,.8)' : 'rgba(74,104,128,.9)';
+      ctx.textAlign = 'center';
+      var label = d.date ? d.date.slice(5) : String(i+1);
+      ctx.fillText(label, x + barW/2, H - 6);
+    }
+  });
+}
+
+function updateCard(idx, data) {
+  tankData[idx] = data;
+  if (data.tank) document.getElementById('name-' + idx).textContent = data.tank;
+
+  var pct     = data.pct != null ? +data.pct : null;
+  var ft      = data.ft  != null ? +data.ft  : null;
+  var warning = !!data.warning;
+  var offline = isUnitOffline(data.timestamp);
+
+  var card = document.getElementById('card-' + idx);
+  if      (offline)   card.className = 'tank-card offline';
+  else if (pct >= 95) card.className = 'tank-card error';
+  else if (warning)   card.className = 'tank-card warning';
+  else                card.className = 'tank-card';
+
+  var badge = document.getElementById('badge-' + idx);
+  badge.className = 'card-badge';
+  if      (offline)   { badge.classList.add('badge-danger');  badge.textContent = 'OFFLINE'; }
+  else if (pct >= 95) { badge.classList.add('badge-danger');  badge.textContent = 'CRITICAL'; }
+  else if (warning)   { badge.classList.add('badge-warning'); badge.textContent = 'WARNING'; }
+  else                { badge.classList.add('badge-ok');      badge.textContent = 'Normal'; }
+
+  document.getElementById('ts-' + idx).textContent = data.timestamp ? 'Updated: ' + data.timestamp : '—';
+  document.getElementById('warn-' + idx).classList.toggle('active', warning && !offline);
+  document.getElementById('offline-' + idx).classList.toggle('active', offline);
+
+  setMetric('level-' + idx, ft,  'ft', offline ? null : warning ? 'warning' : 'accent');
+  setMetric('pct-'   + idx, pct, '%',  offline ? null : warning ? 'warning' : null);
+  if (data.uptime != null) document.getElementById('uptime-' + idx).innerHTML = formatUptime(+data.uptime);
+
+  var fillEl = document.getElementById('fill-' + idx);
+  fillEl.style.height = (pct != null ? pct : 0) + '%';
+  fillEl.className = 'tank-fill' + (warning && !offline ? ' warning' : '');
+  document.getElementById('pct-label-' + idx).textContent = pct != null ? Math.round(pct) + '%' : '—';
+
+  var bar = document.getElementById('bar-' + idx);
+  bar.style.width = (pct != null ? pct : 0) + '%';
+  bar.className = 'progress-fill' + (pct >= 95 ? ' danger' : pct >= WARN_PCT ? ' warning' : '');
+  document.getElementById('track-' + idx).style.setProperty('--warn-pos', WARN_PCT + '%');
+
+  var sysId = idx === 0 ? 'sys-eq' : 'sys-oil';
+  var subId = idx === 0 ? 'sys-eq-sub' : 'sys-oil-sub';
+  var sysEl = document.getElementById(sysId);
+  var subEl = document.getElementById(subId);
+  if (sysEl) {
+    sysEl.textContent = pct != null ? Math.round(pct) + '%' : '—%';
+    sysEl.className = 'sys-card-value' + (offline ? ' orange' : pct >= WARN_PCT ? ' orange' : ' green');
+  }
+  if (subEl) subEl.textContent = offline ? 'OFFLINE' : (ft != null ? ft.toFixed(2) + ' ft filled' : '—');
+
+  if (idx === 0 && data.uptime != null) {
+    var su = document.getElementById('sys-uptime');
+    if (su) su.textContent = formatUptime(+data.uptime);
+  }
+
+  updateAgeBar(idx, data.timestamp);
+}
+
+function setTankRange(idx, hours, btn) {
+  tankRangeHours[idx] = hours;
+  var wrap = document.getElementById('tabs-' + idx);
+  if (wrap) wrap.querySelectorAll('.range-tab').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  var title = document.getElementById('chart-title-' + idx);
+  if (title) title.textContent = 'Fill % — Last ' + hours + ' hour' + (hours > 1 ? 's' : '');
+  drawTankChart(idx);
+}
+
+function getFilteredTankHistory(idx) {
+  var hours = tankRangeHours[idx] || 6;
+  var data = tankHist[idx] || [];
+  if (!data.length) return [];
+  var cutoff = Date.now() - (hours * 60 * 60 * 1000);
+  return data.filter(function(d) {
+    var ts = parseHistoryTimestamp(d);
+    return ts && ts.getTime() >= cutoff;
+  });
+}
+
+function parseHistoryTimestamp(d) {
+  if (!d) return null;
+  if (d.ts)        { var t1 = new Date(d.ts);        if (!isNaN(t1.getTime())) return t1; }
+  if (d.timestamp) { var t2 = new Date(d.timestamp); if (!isNaN(t2.getTime())) return t2; }
+  if (d.time)      { var t3 = new Date(d.time);      if (!isNaN(t3.getTime())) return t3; }
+  return null;
+}
+
+function drawTankChart(idx) {
+  var canvas = document.getElementById('chart-' + idx);
+  var dpr  = window.devicePixelRatio || 1;
+  var rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width  = rect.width  + 'px';
+  canvas.style.height = rect.height + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  var W = rect.width, H = rect.height;
+  ctx.clearRect(0, 0, W, H);
+
+  var data = getFilteredTankHistory(idx);
+  if (data.length < 2) return;
+
+  var pts = data.map(function(d, i) {
+    return { x: (i / (data.length - 1)) * W, y: H - ((+d.p) / 100) * H };
+  });
+
+  var grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(0,212,255,.35)');
+  grad.addColorStop(1, 'rgba(0,212,255,.02)');
+
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, H);
+  ctx.lineTo(pts[0].x, pts[0].y);
+  for (var i = 1; i < pts.length; i++) {
+    var cp = { x: (pts[i-1].x + pts[i].x) / 2, y: (pts[i-1].y + pts[i].y) / 2 };
+    ctx.quadraticCurveTo(pts[i-1].x, pts[i-1].y, cp.x, cp.y);
+  }
+  ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+  ctx.lineTo(pts[pts.length-1].x, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (var j = 1; j < pts.length; j++) {
+    var cp2 = { x: (pts[j-1].x + pts[j].x) / 2, y: (pts[j-1].y + pts[j].y) / 2 };
+    ctx.quadraticCurveTo(pts[j-1].x, pts[j-1].y, cp2.x, cp2.y);
+  }
+  ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+  ctx.strokeStyle = '#00d4ff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  var wY = H - (WARN_PCT / 100) * H;
+  ctx.beginPath();
+  ctx.setLineDash([4,4]);
+  ctx.moveTo(0, wY); ctx.lineTo(W, wY);
+  ctx.strokeStyle = 'rgba(255,107,53,.5)';
+  ctx.lineWidth = 1; ctx.stroke();
+  ctx.setLineDash([]);
+
+  var last = pts[pts.length-1];
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#00d4ff';
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(74,104,128,.9)';
+  ctx.font = '9px Share Tech Mono, monospace';
+  ctx.textAlign = 'center';
+  var labelCount = Math.min(5, data.length);
+  for (var k = 0; k < labelCount; k++) {
+    var index = Math.round((k / (labelCount - 1)) * (data.length - 1));
+    var x = (index / (data.length - 1)) * W;
+    ctx.fillText(data[index].t || '', x, H - 4);
+  }
+}
+
+function isUnitOffline(tsString) {
+  if (!tsString) return true;
+  return (Date.now() - new Date(tsString).getTime()) >= OFFLINE_MS;
+}
+
+function updateAgeBar(idx, tsString) {
+  if (!tsString) return;
+  var ageMs    = Date.now() - new Date(tsString).getTime();
+  var freshPct = Math.max(0, 100 - (ageMs / OFFLINE_MS * 100));
+  var ageSec   = Math.floor(ageMs / 1000);
+  var mins     = Math.floor(ageSec / 60);
+  var secs     = ageSec % 60;
+  var ageStr   = ageSec < 60 ? (ageSec + 's ago') : (mins + 'm ' + secs + 's ago');
+
+  var ageEl = document.getElementById('age-' + idx);
+  ageEl.style.width = freshPct + '%';
+  ageEl.style.background = freshPct > 60
+    ? 'linear-gradient(90deg,var(--accent2),var(--accent))'
+    : freshPct > 30 ? 'linear-gradient(90deg,#ffb347,var(--warn))'
+    : 'linear-gradient(90deg,var(--danger),#ff6b35)';
+
+  setEl('age-label-' + idx, 'Data age: ' + ageStr);
+  var offAgeEl = document.getElementById('offline-age-' + idx);
+  if (offAgeEl) offAgeEl.textContent = 'Last data received: ' + ageStr;
+
+  var isOffline = ageMs >= OFFLINE_MS;
+  var card = document.getElementById('card-' + idx);
+  if (isOffline && card.className.indexOf('offline') === -1) {
+    card.className = 'tank-card offline';
+    var badge = document.getElementById('badge-' + idx);
+    badge.className = 'card-badge badge-danger';
+    badge.textContent = 'OFFLINE';
+    document.getElementById('offline-' + idx).classList.add('active');
+    document.getElementById('warn-' + idx).classList.remove('active');
+    updateGlobalStatus();
+  }
+}
+
+function tickAgeBars() {
+  [0,1].forEach(function(i){ if (tankData[i] && tankData[i].timestamp) updateAgeBar(i, tankData[i].timestamp); });
+}
+
+function setMetric(id, val, unit, colorClass) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var num = '—';
+  if (val != null && !isNaN(val)) num = Number.isInteger(+val) ? format0(+val) : format1(+val);
+  el.innerHTML = num + '<span>' + unit + '</span>';
+  el.className = 'metric-value' + (colorClass ? ' ' + colorClass : '');
+}
+
+function setEl(id, txt) {
+  var e = document.getElementById(id);
+  if (e) e.textContent = txt;
+}
+
+function formatUptime(s) {
+  return String(Math.floor(s/3600)).padStart(2,'0') + ':' +
+         String(Math.floor((s%3600)/60)).padStart(2,'0') + ':' +
+         String(s%60).padStart(2,'0');
+}
+
+function setStatus(state) {
+  var dot = document.getElementById('global-dot');
+  var lbl = document.getElementById('global-status');
+  if (state === 'fetching') { dot.className='dot'; lbl.textContent='Fetching…'; }
+  if (state === 'error')    { dot.className='dot error'; lbl.textContent='Cannot reach Google Sheets'; }
+}
+
+function updateGlobalStatus() {
+  var dot = document.getElementById('global-dot');
+  var lbl = document.getElementById('global-status');
+  var offlineUnits = [];
+  [0,1].forEach(function(i) {
+    if (tankData[i] && tankData[i].timestamp && isUnitOffline(tankData[i].timestamp))
+      offlineUnits.push(tankData[i].tank || ('Unit ' + (i+1)));
+  });
+  if (flowData && flowData.timestamp && isUnitOffline(flowData.timestamp)) offlineUnits.push('Flowmeter');
+  var anyWarn = [0,1].some(function(i){ return tankData[i] && tankData[i].warning && !isUnitOffline(tankData[i].timestamp); });
+  var hasData = [0,1].some(function(i){ return tankData[i] && tankData[i].pct != null; }) || (flowData && flowData.rate != null);
+
+  if (offlineUnits.length > 0) { dot.className='dot error'; lbl.textContent='OFFLINE: ' + offlineUnits.join(' & ') + ' — no data 5+ min'; }
+  else if (anyWarn)  { dot.className='dot warning'; lbl.textContent='Warning — tank nearly full'; }
+  else if (hasData)  { dot.className='dot online';  lbl.textContent='All systems online'; }
+  else               { dot.className='dot error';   lbl.textContent='No data received'; }
+}
+
+window.addEventListener('resize', function() {
+  [0,1].forEach(function(i){ if (tankHist[i].length > 1) drawTankChart(i); });
+  if (flowHistory30.length) drawFlowBarChart();
+});
+</script>
+</body>
+</html>
