@@ -624,8 +624,8 @@ function updateFlow(f) {
   var offline   = isUnitOffline(ts);
 
   setFlowVal('flow-live', live, 'L/h');
-  setFlowVal('flow-today', today, 'L');
-  setFlowVal('flow-yesterday', yesterday, 'L');
+  setFlowVal('flow-today', today, 'm³');
+  setFlowVal('flow-yesterday', yesterday, 'm³');
 
   var totalEl = document.getElementById('flow-totalizer');
   if (totalEl) {
