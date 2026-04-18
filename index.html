@@ -387,7 +387,7 @@ footer{
     </div>
     <div class="sys-card">
       <div class="sys-card-label">Inflow today</div>
-      <div class="sys-card-value purple" id="sys-inflow">— L</div>
+      <div class="sys-card-value purple" id="sys-inflow">— m³</div>
       <div class="sys-card-sub">DAF unit input</div>
     </div>
     <div class="sys-card">
@@ -505,7 +505,7 @@ footer{
     <div class="flow-graph-header">
       <div>
         <div class="flow-graph-title">Daily inflow volume — last 30 days</div>
-        <div class="flow-graph-sub">Each bar = 8:00 AM to 8:00 AM · Liters/day · DAF unit inflow</div>
+        <div class="flow-graph-sub">Each bar = 8:00 AM to 8:00 AM · m³/day · DAF unit inflow</div>
       </div>
       <div class="flow-graph-stats">
         <div class="fgs-item">
@@ -634,7 +634,7 @@ function updateFlow(f) {
     totalEl.innerHTML = txt + '<span>m³</span>';
   }
 
-  setEl('sys-inflow', today != null ? format0(today) + ' L' : '—');
+  setEl('sys-inflow', today != null ? format1(today) + ' m³' : '—');
 
   var alert = document.getElementById('flow-alert');
   if (!offline && live != null && live > FLOW_MAX_NORMAL) alert.classList.add('active');
@@ -661,9 +661,9 @@ function updateFlowStats() {
   var avg   = vals.reduce(function(a,b){ return a+b; }, 0) / vals.length;
   var peak  = Math.max.apply(null, vals);
   var total = vals.reduce(function(a,b){ return a+b; }, 0);
-  setEl('flow-avg',   format0(avg)   + ' L');
-  setEl('flow-peak',  format0(peak)  + ' L');
-  setEl('flow-total', format0(total) + ' L');
+  setEl('flow-avg',   format1(avg)   + ' m³');
+  setEl('flow-peak',  format1(peak)  + ' m³');
+  setEl('flow-total', format1(total) + ' m³');
 }
 
 function drawFlowBarChart() {
@@ -700,7 +700,7 @@ function drawFlowBarChart() {
   ctx.setLineDash([]);
   ctx.font = '10px Share Tech Mono, monospace';
   ctx.fillStyle = 'rgba(167,139,250,.7)';
-  ctx.fillText('avg ' + format0(avg) + ' L', W - padR - 90, avgY - 4);
+  ctx.fillText('avg ' + format1(avg) + ' m³', W - padR - 110, avgY - 4);
 
   data.forEach(function(d, i) {
     var v    = +d.vol || 0;
